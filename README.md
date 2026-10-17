@@ -48,9 +48,10 @@ Standard macOS installer files (`.dmg` and `.pkg`) are available under [GitHub R
 
 | Architecture | Apple Disk Image (`.dmg`) | Installer Package (`.pkg`) |
 |---|---|---|
-| **Universal (All Macs)** | `Glance-v2.0-Universal.dmg` | `Glance-v2.0-Universal.pkg` |
-| **Apple Silicon (M1/M2/M3/M4)** | `Glance-v2.0-AppleSilicon.dmg` | `Glance-v2.0-AppleSilicon.pkg` |
-| **Intel (x86_64 / Hackintosh)** | `Glance-v2.0-Intel.dmg` | `Glance-v2.0-Intel.pkg` |
+| **Universal (All Macs)** | `Glance-v2.1-Universal.dmg` | `Glance-v2.1-Universal.pkg` |
+| **Apple Silicon (M1/M2/M3/M4)** | `Glance-v2.1-AppleSilicon.dmg` | `Glance-v2.1-AppleSilicon.pkg` |
+| **Intel (x86_64 / Hackintosh)** | `Glance-v2.1-Intel.dmg` | `Glance-v2.1-Intel.pkg` |
+| **Standalone Face Scanner** | `FaceScanner-v2.1-Universal.dmg` | `FaceScanner-v2.1-Universal.pkg` |
 
 ### How to Install:
 - **Using `.pkg` (Recommended)**: Double-click the `.pkg` installer to automatically install both `Glance.app` and `FaceScanner.app` into `/Applications` — no unzipping required!
