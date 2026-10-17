@@ -44,14 +44,17 @@ Everything runs **100% offline and locally** on your machine. Your face embeddin
 
 ## 📥 Downloads & Installation
 
-Pre-compiled app bundles are available in [GitHub Releases](https://github.com/SukrutMannari/glance-V2/releases):
+Standard macOS installer files (`.dmg` and `.pkg`) are available under [GitHub Releases](https://github.com/SukrutMannari/glance-V2/releases):
 
-- **Apple Silicon (M1/M2/M3/M4 Macs)**: `Glance-AppleSilicon.zip`
-- **Intel Macs (or Hackintoshes)**: `Glance-Intel.zip`
+| Architecture | Apple Disk Image (`.dmg`) | Installer Package (`.pkg`) |
+|---|---|---|
+| **Universal (All Macs)** | `Glance-v2.0-Universal.dmg` | `Glance-v2.0-Universal.pkg` |
+| **Apple Silicon (M1/M2/M3/M4)** | `Glance-v2.0-AppleSilicon.dmg` | `Glance-v2.0-AppleSilicon.pkg` |
+| **Intel (x86_64 / Hackintosh)** | `Glance-v2.0-Intel.dmg` | `Glance-v2.0-Intel.pkg` |
 
-1. Download the archive for your Mac architecture.
-2. Unzip and drag `Glance.app` to your `/Applications` folder.
-3. Open `Glance.app` from `/Applications`.
+### How to Install:
+- **Using `.dmg`**: Double-click the `.dmg` to mount the image, then drag `Glance.app` into your `Applications` shortcut folder.
+- **Using `.pkg`**: Double-click the `.pkg` to run the macOS installation wizard, which automatically installs Glance into `/Applications`.
 
 ---
 
