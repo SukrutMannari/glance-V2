@@ -18,42 +18,54 @@ final class MacFaceIDEngine: @unchecked Sendable {
     static let shared = MacFaceIDEngine()
     private static let logger = Logger(subsystem: "com.jonathan.glance", category: "MacFaceIDEngine")
 
-    private var resolvedPaths: (python: String, script: String) {
+    private var resolvedPythonBinary: String {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser.path
 
-        var candidateDirs: [String] = []
-        if let res = Bundle.main.resourceURL?.appendingPathComponent("MacFaceID").path {
-            candidateDirs.append(res)
+        var candidateVenvs: [String] = [
+            "\(home)/.macfaceid/venv/bin/python3",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/venv/bin/python3"
+        ]
+        if let res = Bundle.main.resourceURL {
+            candidateVenvs.append(res.appendingPathComponent("MacFaceID/venv/bin/python3").path)
         }
-        candidateDirs.append("\(home)/.macfaceid")
-        candidateDirs.append(Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MacFaceID").path)
-        candidateDirs.append("/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID")
+        candidateVenvs.append(Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MacFaceID/venv/bin/python3").path)
+        candidateVenvs.append("/usr/local/bin/python3")
+        candidateVenvs.append("/opt/homebrew/bin/python3")
 
-        for dir in candidateDirs {
-            let pythonBin = "\(dir)/venv/bin/python3"
-            let verifyScript = "\(dir)/verify_face.py"
-            if fm.fileExists(atPath: pythonBin) && fm.fileExists(atPath: verifyScript) {
-                return (pythonBin, verifyScript)
+        for py in candidateVenvs {
+            if fm.fileExists(atPath: py) {
+                return py
             }
         }
 
-        for dir in candidateDirs {
-            let verifyScript = "\(dir)/verify_face.py"
-            if fm.fileExists(atPath: verifyScript) {
-                for py in ["/usr/local/bin/python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"] {
-                    if fm.fileExists(atPath: py) {
-                        return (py, verifyScript)
-                    }
-                }
+        return "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/venv/bin/python3"
+    }
+
+    private func resolvedScriptPath(named scriptName: String) -> String {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+
+        var candidateScripts: [String] = [
+            "\(home)/.macfaceid/\(scriptName)",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/\(scriptName)",
+            Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MacFaceID/\(scriptName)").path
+        ]
+        if let res = Bundle.main.resourceURL {
+            candidateScripts.append(res.appendingPathComponent("MacFaceID/\(scriptName)").path)
+        }
+
+        for s in candidateScripts {
+            if fm.fileExists(atPath: s) {
+                return s
             }
         }
 
-        // Default fallback
-        return (
-            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/venv/bin/python3",
-            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/verify_face.py"
-        )
+        return "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/\(scriptName)"
+    }
+
+    private var resolvedPaths: (python: String, script: String) {
+        (resolvedPythonBinary, resolvedScriptPath(named: "verify_face.py"))
     }
 
     private var activeProcess: Process?
@@ -127,40 +139,7 @@ final class MacFaceIDEngine: @unchecked Sendable {
     // MARK: - Custom Face Scanner & Template Management
 
     private var resolvedEnrollmentPaths: (python: String, script: String) {
-        let fm = FileManager.default
-        let home = fm.homeDirectoryForCurrentUser.path
-
-        var candidateDirs: [String] = []
-        if let res = Bundle.main.resourceURL?.appendingPathComponent("MacFaceID").path {
-            candidateDirs.append(res)
-        }
-        candidateDirs.append("\(home)/.macfaceid")
-        candidateDirs.append(Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MacFaceID").path)
-        candidateDirs.append("/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID")
-
-        for dir in candidateDirs {
-            let pythonBin = "\(dir)/venv/bin/python3"
-            let enrollScript = "\(dir)/enroll_face.py"
-            if fm.fileExists(atPath: pythonBin) && fm.fileExists(atPath: enrollScript) {
-                return (pythonBin, enrollScript)
-            }
-        }
-
-        for dir in candidateDirs {
-            let enrollScript = "\(dir)/enroll_face.py"
-            if fm.fileExists(atPath: enrollScript) {
-                for py in ["/usr/local/bin/python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"] {
-                    if fm.fileExists(atPath: py) {
-                        return (py, enrollScript)
-                    }
-                }
-            }
-        }
-
-        return (
-            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/venv/bin/python3",
-            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/enroll_face.py"
-        )
+        (resolvedPythonBinary, resolvedScriptPath(named: "enroll_face.py"))
     }
 
     func isEnrolled(username: String = NSUserName()) -> Bool {

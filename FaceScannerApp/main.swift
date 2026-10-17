@@ -16,40 +16,38 @@ final class FaceScannerApp: NSObject, NSApplicationDelegate {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser.path
 
-        let candidateDirs = [
-            Bundle.main.resourceURL?.appendingPathComponent("MacFaceID").path,
-            "\(home)/.macfaceid",
-            "/Applications/Glance.app/Contents/Resources/MacFaceID",
-            Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MacFaceID").path,
-            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID"
-        ].compactMap { $0 }
+        var candidatePythons: [String] = [
+            "\(home)/.macfaceid/venv/bin/python3",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/venv/bin/python3"
+        ]
+        if let res = Bundle.main.resourceURL {
+            candidatePythons.append(res.appendingPathComponent("MacFaceID/venv/bin/python3").path)
+        }
+        candidatePythons.append("/usr/local/bin/python3")
+        candidatePythons.append("/opt/homebrew/bin/python3")
 
         var pythonBin: String?
-        var scriptPath: String?
-
-        for dir in candidateDirs {
-            let py = "\(dir)/venv/bin/python3"
-            let sc = "\(dir)/enroll_face.py"
-            if fm.fileExists(atPath: py) && fm.fileExists(atPath: sc) {
+        for py in candidatePythons {
+            if fm.fileExists(atPath: py) {
                 pythonBin = py
-                scriptPath = sc
                 break
             }
         }
 
-        if pythonBin == nil || scriptPath == nil {
-            for dir in candidateDirs {
-                let sc = "\(dir)/enroll_face.py"
-                if fm.fileExists(atPath: sc) {
-                    for sysPy in ["/usr/local/bin/python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"] {
-                        if fm.fileExists(atPath: sysPy) {
-                            pythonBin = sysPy
-                            scriptPath = sc
-                            break
-                        }
-                    }
-                    if pythonBin != nil { break }
-                }
+        var candidateScripts: [String] = [
+            "\(home)/.macfaceid/enroll_face.py",
+            "/Applications/Glance.app/Contents/Resources/MacFaceID/enroll_face.py",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/enroll_face.py"
+        ]
+        if let res = Bundle.main.resourceURL {
+            candidateScripts.append(res.appendingPathComponent("MacFaceID/enroll_face.py").path)
+        }
+
+        var scriptPath: String?
+        for sc in candidateScripts {
+            if fm.fileExists(atPath: sc) {
+                scriptPath = sc
+                break
             }
         }
 
