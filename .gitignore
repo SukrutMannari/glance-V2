@@ -15,5 +15,16 @@ __pycache__/
 
 .DS_Store
 
-# Local release notes
+# Local release notes and artifacts
 RELEASING.md
+releases/
+*.zip
+build-arm64/
+build-universal/
+
+# MacFaceID runtime assets and templates
+MacFaceID/venv/
+MacFaceID/models/
+MacFaceID/templates/*.npy
+MacFaceID/templates/*.jpg
+MacFaceID/__pycache__/

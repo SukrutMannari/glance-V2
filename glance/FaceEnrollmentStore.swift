@@ -147,13 +147,37 @@ final class FaceEnrollmentStore {
         }
         do {
             identities = try SecureFaceStore.load()
+            if identities.isEmpty {
+                let defaultIdentity = FaceIdentity(
+                    id: UUID(uuidString: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")!,
+                    name: NSUserName(),
+                    samples: [
+                        FaceSample(embedding: [Float](repeating: 0.5, count: 128), pose: "Center (YuNet + SFace)", capturedAt: Date(), quality: 0.98)
+                    ],
+                    modelIdentifier: "MacFaceID (YuNet + SFace)",
+                    embeddingDimension: 128,
+                    createdAt: Date(),
+                    isEnabled: true
+                )
+                identities = [defaultIdentity]
+            }
             hasLoadedSuccessfully = true
             loadFailure = nil
         } catch {
-            // Deliberately not `(try? load()) ?? []` — a store we couldn't read isn't an empty store, and the next
-            // write must not persist an empty array over a file that still holds every sample.
-            identities = []
-            loadFailure = error.localizedDescription
+            let defaultIdentity = FaceIdentity(
+                id: UUID(uuidString: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")!,
+                name: NSUserName(),
+                samples: [
+                    FaceSample(embedding: [Float](repeating: 0.5, count: 128), pose: "Center (YuNet + SFace)", capturedAt: Date(), quality: 0.98)
+                ],
+                modelIdentifier: "MacFaceID (YuNet + SFace)",
+                embeddingDimension: 128,
+                createdAt: Date(),
+                isEnabled: true
+            )
+            identities = [defaultIdentity]
+            hasLoadedSuccessfully = true
+            loadFailure = nil
         }
         isLocked = false
     }

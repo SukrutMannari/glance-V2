@@ -86,37 +86,70 @@ final class POCController {
 
     // MARK: - Injection
 
+    private nonisolated func logUnlock(_ message: String) {
+        let line = "[\(Date())] \(message)\n"
+        if let data = line.data(using: .utf8) {
+            let url = URL(fileURLWithPath: "/tmp/glance_unlock.log")
+            if let handle = try? FileHandle(forWritingTo: url) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                try? handle.close()
+            } else {
+                try? data.write(to: url)
+            }
+        }
+    }
+
     /// Reads + decrypts + injects the stored password, zeroing the plaintext
     /// buffer before returning. When `requireAuthoritativeLock` is true (the
     /// auto-trigger path), refuses to inject unless the CGSession dictionary
     /// confirms the screen is actually locked.
     func injectStoredPassword(requireAuthoritativeLock: Bool = false) async {
-        guard KeystrokeInjector.isAccessibilityTrusted() else {
+        logUnlock("injectStoredPassword called (requireAuthoritativeLock: \(requireAuthoritativeLock))")
+        let axTrusted = KeystrokeInjector.isAccessibilityTrusted()
+        let sessionUnlocked = SecureCredentialManager.isSessionUnlocked
+        let hasPassword = SecureCredentialManager.hasStoredPassword()
+        let isLocked = LockMonitor.isScreenActuallyLocked()
+        
+        logUnlock("State: axTrusted=\(axTrusted), sessionUnlocked=\(sessionUnlocked), hasPassword=\(hasPassword), isLocked=\(isLocked)")
+
+        guard axTrusted else {
             statusMessage = "Accessibility not granted — open System Settings and enable glance."
+            logUnlock("FAILED: Accessibility not granted (isAccessibilityTrusted == false) — triggering system prompt")
+            DispatchQueue.main.async {
+                KeystrokeInjector.promptForAccessibility()
+            }
             return
         }
-        guard SecureCredentialManager.isSessionUnlocked else {
+        guard sessionUnlocked else {
             statusMessage = "Session locked — authenticate with Touch ID first."
+            logUnlock("FAILED: Session is locked (isSessionUnlocked == false)")
             return
         }
 
         if requireAuthoritativeLock {
-            guard LockMonitor.isScreenActuallyLocked() else {
+            guard isLocked else {
                 statusMessage = "Skipped: CGSession reports screen is not actually locked."
+                logUnlock("SKIPPED: CGSession reports screen is not actually locked")
                 return
             }
         }
 
         statusMessage = "Injecting…"
+        logUnlock("Reading password from SecureCredentialManager...")
         do {
             try await Task.detached(priority: .userInitiated) {
                 var bytes = try SecureCredentialManager.readPassword()
+                self.logUnlock("Read password successfully, count = \(bytes.count) bytes. Calling KeystrokeInjector.typeAndReturn...")
                 defer { bytes.resetBytes(in: 0..<bytes.count) }
                 try KeystrokeInjector.typeAndReturn(bytes)
+                self.logUnlock("KeystrokeInjector.typeAndReturn finished successfully.")
             }.value
             statusMessage = "Injected stored password + Return at \(Date().formatted(date: .omitted, time: .standard))"
+            logUnlock("SUCCESS: Password injected and return pressed.")
         } catch {
             statusMessage = "Injection failed: \(error.localizedDescription)"
+            logUnlock("FAILED: Injection error: \(error.localizedDescription)")
         }
     }
 }

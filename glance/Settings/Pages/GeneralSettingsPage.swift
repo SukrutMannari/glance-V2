@@ -96,6 +96,10 @@ struct GeneralSettingsPage: View {
                     GlanceToggle(isOn: $settings.showsInMenuBar)
                 }
                 SettingsGroupDivider()
+                SettingsRowContent(title: "Hide in Dock") {
+                    GlanceToggle(isOn: $settings.hideDockIcon)
+                }
+                SettingsGroupDivider()
                 SettingsRowContent(title: "Enable Face Unlock") {
                     GlanceToggle(isOn: $coordinator.isEnabled)
                 }

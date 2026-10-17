@@ -100,11 +100,11 @@ enum KeystrokeInjector {
     /// Batching at this conservative limit avoids the undocumented truncation seen
     /// with longer payloads, while replacing one down/up pair per character with
     /// one pair per batch.
-    nonisolated private static let maximumUnicodeBatchLength = 20
-    nonisolated private static let unicodeEventInterval: TimeInterval = 0.004
+    nonisolated private static let maximumUnicodeBatchLength = 1
+    nonisolated private static let unicodeEventInterval: TimeInterval = 0.015
 
-    /// Posts the password in small UTF-16 batches. Splitting occurs only between
-    /// surrogate pairs, so non-BMP password characters are never corrupted.
+    /// Posts the password character by character. Individual key events ensure
+    /// NSSecureTextField in loginwindow doesn't reject batch text input.
     private nonisolated static func postUnicodeText(_ text: String, source: CGEventSource?) throws {
         let utf16 = Array(text.utf16)
         try utf16.withUnsafeBufferPointer { buffer in
@@ -150,13 +150,14 @@ enum KeystrokeInjector {
 
     /// Physical Return key (virtual key 0x24).
     private nonisolated static func postReturn(source: CGEventSource?) throws {
+        Thread.sleep(forTimeInterval: 0.12)
         let returnKey: CGKeyCode = 0x24
         guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: returnKey, keyDown: true),
               let keyUp = CGEvent(keyboardEventSource: source, virtualKey: returnKey, keyDown: false) else {
             throw KeystrokeError.eventCreationFailed
         }
         keyDown.post(tap: .cghidEventTap)
-        Thread.sleep(forTimeInterval: 0.012)
+        Thread.sleep(forTimeInterval: 0.02)
         keyUp.post(tap: .cghidEventTap)
     }
 }

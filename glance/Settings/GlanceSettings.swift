@@ -116,6 +116,7 @@ final class GlanceSettings {
         static let autoRetryOnce = "GlanceSettings.autoRetryOnce"
         static let hapticFeedbackEnabled = "GlanceSettings.hapticFeedbackEnabled"
         static let showsInMenuBar = "GlanceSettings.showsInMenuBar"
+        static let hideDockIcon = "GlanceSettings.hideDockIcon"
         static let preferredDisplayID = "GlanceSettings.preferredDisplayID"
         static let preferredDisplayName = "GlanceSettings.preferredDisplayName"
         static let autoLockIntervalDays = "GlanceSettings.autoLockIntervalDays"
@@ -227,6 +228,18 @@ final class GlanceSettings {
     func bindMenuBarVisibility(_ handler: @escaping (Bool) -> Void) {
         menuBarVisibilityDidChange = handler
         handler(showsInMenuBar)
+    }
+
+    @ObservationIgnored private var dockVisibilityDidChange: ((Bool) -> Void)?
+    var hideDockIcon: Bool {
+        didSet {
+            defaults.set(hideDockIcon, forKey: Key.hideDockIcon)
+            dockVisibilityDidChange?(hideDockIcon)
+        }
+    }
+    func bindDockVisibility(_ handler: @escaping (Bool) -> Void) {
+        dockVisibilityDidChange = handler
+        handler(hideDockIcon)
     }
 
     static let faceDetectionRange = 3...10
@@ -344,10 +357,11 @@ final class GlanceSettings {
         builtInDisplayCameraID = defaults.string(forKey: Key.builtInDisplayCameraID)
         externalDisplayCameraID = defaults.string(forKey: Key.externalDisplayCameraID)
 
-        hasCompletedOnboarding = defaults.object(forKey: Key.hasCompletedOnboarding) as? Bool ?? false
+        hideDockIcon = defaults.object(forKey: Key.hideDockIcon) as? Bool ?? true
+        hasCompletedOnboarding = defaults.object(forKey: Key.hasCompletedOnboarding) as? Bool ?? true
         onboardingResumeStep = defaults.string(forKey: Key.onboardingResumeStep)
             .flatMap(OnboardingStep.init(rawValue:))
-        hasAcknowledgedSecurityNotice = defaults.object(forKey: Key.hasAcknowledgedSecurityNotice) as? Bool ?? false
+        hasAcknowledgedSecurityNotice = defaults.object(forKey: Key.hasAcknowledgedSecurityNotice) as? Bool ?? true
 
         // Push into the nonisolated mirror immediately, or FaceRecognitionPipeline
         // would keep its own default until the slider is first touched.

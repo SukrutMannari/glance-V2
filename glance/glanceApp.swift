@@ -80,8 +80,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.setMenuBarVisibility(isVisible)
         }
 
-        // SwiftUI can flip the app back to `.regular` while installing scenes even with `.suppressed`; re-assert accessory.
-        NSApp.setActivationPolicy(.accessory)
+        GlanceSettings.shared.bindDockVisibility { isHidden in
+            let settingsOpen = NSApp.windows.contains { $0.canBecomeMain && $0.isVisible }
+            if isHidden && !settingsOpen {
+                NSApp.setActivationPolicy(.accessory)
+            } else if !isHidden {
+                NSApp.setActivationPolicy(.regular)
+            }
+        }
+
+        // Apply initial policy based on preference
+        if GlanceSettings.shared.hideDockIcon {
+            NSApp.setActivationPolicy(.accessory)
+        } else {
+            NSApp.setActivationPolicy(.regular)
+        }
 
         // `object: nil` deliberately — the Settings window may not exist yet (SwiftUI creates scene content lazily), and this
         // still matches it by identity in the handler below once it does close.
@@ -101,6 +114,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         } else {
             presentOnboardingGate()
+        }
+
+        if !KeystrokeInjector.isAccessibilityTrusted() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                KeystrokeInjector.promptForAccessibility()
+            }
         }
     }
 
@@ -199,7 +218,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !environment.updater.isPresentingUpdateUI else { return }
         let stillOpen = NSApp.windows.contains { $0 !== closingWindow && $0.canBecomeMain && $0.isVisible }
         guard !stillOpen else { return }
-        NSApp.setActivationPolicy(.accessory)
+        if GlanceSettings.shared.hideDockIcon {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     /// Fires right before the menu opens — simpler than keeping an `NSMenuItem` reactively bound to `isSessionUnlocked`.

@@ -156,10 +156,11 @@ final class FaceUnlockCoordinator {
     private func disarmOverlay() {
         scanTask?.cancel()
         scanTask = nil
-        // Bumping makes any cycle still suspended at `await camera.start()` inert, rather than resuming and re-showing the overlay.
+        // Bumping makes any cycle still suspended inert, rather than resuming and re-showing the overlay.
         scanGeneration &+= 1
         autoRetryTask?.cancel()
         autoRetryTask = nil
+        MacFaceIDEngine.shared.cancel()
         camera.stop()
         NotchOverlayController.shared.disarm()
         // Covers isEnabled being switched off directly, keeping "disarmed" and "not listening for space" in lockstep.
@@ -238,14 +239,7 @@ final class FaceUnlockCoordinator {
     private func runScanCycle(generation: Int) async {
         guard LockMonitor.isScreenActuallyLocked() else { return }
 
-        await camera.start()
         guard generation == scanGeneration else { return }
-
-        if let error = camera.errorMessage {
-            statusMessage = error
-            camera.stop()
-            return
-        }
 
         let showsUI = self.showsUI
         if showsUI {
@@ -253,49 +247,37 @@ final class FaceUnlockCoordinator {
         }
         statusMessage = "Looking for your face…"
 
-        let outcome = await observeScanWindow(
-            deadline: Date().addingTimeInterval(scanWindowDuration),
-            requireOverlayScanning: showsUI
-        )
+        let duration = max(8.0, Double(scanWindowDuration))
+        let outcome = await MacFaceIDEngine.shared.verify(timeoutSeconds: duration)
 
-        // A newer cycle now owns the camera and overlay — leave both alone, and leave the auto-retry one-shot unspent.
+        // A newer cycle now owns the overlay — leave it alone, and leave the auto-retry one-shot unspent.
         guard generation == scanGeneration else { return }
-
-        camera.stop()
 
         switch outcome {
         case .matched:
-            // The unlock already happened inside observeScanWindow — this only decides whether anything is shown about it.
+            statusMessage = "Face verified!"
+            lastOutcome = "Matched \(NSUserName()) via MacFaceID"
             if showsUI {
                 NotchOverlayController.shared.finish(success: true)
             }
-        case .consistentlyWrongFace:
+            await pocController.injectStoredPassword(requireAuthoritativeLock: false)
+
+        case .noMatch:
             statusMessage = "Face not recognized."
             if showsUI {
                 NotchOverlayController.shared.finish(success: false)
-                statusMessage = "Face not recognized — hover the notch to try again."
+                statusMessage = "Face not recognized — press space or hover notch to try again."
                 scheduleAutoRetryIfEnabled(after: NotchOverlayController.shared.failureHoldDuration)
             } else {
                 scheduleAutoRetryIfEnabled(after: headlessRetryDelay)
             }
-        case .spoofSuspected:
-            statusMessage = "Couldn't confirm a live face."
+
+        case .error(let detail):
+            statusMessage = "Face engine error: \(detail)"
             if showsUI {
                 NotchOverlayController.shared.finish(success: false)
-                statusMessage = "Couldn't confirm a live face — hover the notch to try again."
-                scheduleAutoRetryIfEnabled(after: NotchOverlayController.shared.failureHoldDuration)
-            } else {
-                scheduleAutoRetryIfEnabled(after: headlessRetryDelay)
             }
-        case .noResolution:
-            statusMessage = "No face detected."
-            if showsUI {
-                // No explicit collapse call: NotchOverlayController's own scanning timeout fires on the same mark and collapses itself.
-                statusMessage = "No face detected — hover the notch to try again."
-                scheduleAutoRetryIfEnabled(after: NotchOverlayController.shared.collapseAnimationDuration)
-            } else {
-                scheduleAutoRetryIfEnabled(after: headlessRetryDelay)
-            }
+            scheduleAutoRetryIfEnabled(after: headlessRetryDelay)
         }
     }
 

@@ -60,16 +60,38 @@ struct PasswordSettingsPage: View {
         }
     }
 
+    @State private var inlinePassword: String = ""
+    @State private var isSaving: Bool = false
+
     // MARK: - No password stored
 
     private var noPasswordState: some View {
-        SettingsEmptyStateView(
-            icon: "lock.fill",
-            message: "Set up a password",
-            buttonTitle: "Set password",
-            caption: statusMessage,
-            action: { OnboardingController.startPasswordOnly() }
-        )
+        VStack(alignment: .leading, spacing: SettingsMetrics.rowSpacing) {
+            SettingsGroup {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Set up your Mac Password")
+                        .font(.headline)
+                    Text("Glance securely encrypts this password in your macOS Keychain and types it in when your face is verified.")
+                        .font(.caption)
+                        .foregroundStyle(SettingsMetrics.textSecondary)
+
+                    SecureField("Mac Password", text: $inlinePassword)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        SettingsPrimaryButton(title: isSaving ? "Saving…" : "Save Password", compact: true) {
+                            saveInlinePassword()
+                        }
+                        .disabled(inlinePassword.isEmpty || isSaving)
+                    }
+                }
+                .padding(.vertical, 8)
+            }
+
+            if let statusMessage {
+                SettingsCaption(text: statusMessage)
+            }
+        }
     }
 
     // MARK: - Locked
@@ -141,6 +163,19 @@ struct PasswordSettingsPage: View {
             // it now rather than leaving Your Face stuck showing "locked".
             FaceEnrollmentStore.shared.reloadIfUnlocked()
             isUnlocking = false
+        }
+    }
+
+    private func saveInlinePassword() {
+        guard !inlinePassword.isEmpty else { return }
+        isSaving = true
+        pocController.passwordInput = inlinePassword
+        inlinePassword = ""
+        Task {
+            await pocController.savePassword()
+            pocController.refreshCredentialStatus()
+            statusMessage = pocController.statusMessage
+            isSaving = false
         }
     }
 

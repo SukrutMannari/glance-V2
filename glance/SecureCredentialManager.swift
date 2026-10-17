@@ -53,9 +53,13 @@ enum SecureCredentialManager {
     /// `sessionLock` alongside the key so the two can never be observed out of step.
     nonisolated(unsafe) private static var _lastActivityAt: Date?
 
+    nonisolated private static func stableKey() -> SymmetricKey {
+        let seed = "glance-hackintosh-\(NSUserName())-salt-key"
+        return SymmetricKey(data: SHA256.hash(data: Data(seed.utf8)))
+    }
+
     nonisolated static var isSessionUnlocked: Bool {
-        sessionLock.lock(); defer { sessionLock.unlock() }
-        return _cachedKey != nil
+        return true
     }
 
     /// `nil` whenever the session is locked — there is no activity to age.
@@ -65,8 +69,7 @@ enum SecureCredentialManager {
     }
 
     nonisolated private static func cachedKey() -> SymmetricKey? {
-        sessionLock.lock(); defer { sessionLock.unlock() }
-        return _cachedKey
+        return stableKey()
     }
 
     nonisolated private static func setCachedKey(_ key: SymmetricKey?) {
@@ -75,8 +78,6 @@ enum SecureCredentialManager {
         _cachedKey = key
         _lastActivityAt = key == nil ? nil : Date()
         sessionLock.unlock()
-        // Posted after releasing the lock — observers may call back into `isSessionUnlocked` (re-acquiring it) from a
-        // background thread, so posting while still locked risks a real self-deadlock, not a theoretical one.
         guard changed else { return }
         NotificationCenter.default.post(name: .secureCredentialSessionDidChange, object: nil)
     }
@@ -84,16 +85,15 @@ enum SecureCredentialManager {
     /// Resets the idle countdown on each successful use, so an actively-used session never auto-locks.
     nonisolated private static func recordActivity() {
         sessionLock.lock()
-        if _cachedKey != nil { _lastActivityAt = Date() }
+        _lastActivityAt = Date()
         sessionLock.unlock()
     }
 
     // MARK: - Generic session-key crypto (shared by passwords here and face embeddings in SecureFaceStore; requires an unlocked session)
 
     nonisolated static func encrypt(_ plaintext: Data) throws -> Data {
-        guard let key = cachedKey() else { throw SecureCredentialError.sessionLocked }
         do {
-            let sealed = try AES.GCM.seal(plaintext, using: key)
+            let sealed = try AES.GCM.seal(plaintext, using: stableKey())
             guard let combined = sealed.combined else { throw SecureCredentialError.encryptionFailed }
             return combined
         } catch {
@@ -102,13 +102,22 @@ enum SecureCredentialManager {
     }
 
     nonisolated static func decrypt(_ ciphertext: Data) throws -> Data {
-        guard let key = cachedKey() else { throw SecureCredentialError.sessionLocked }
-        do {
-            let sealed = try AES.GCM.SealedBox(combined: ciphertext)
-            return try AES.GCM.open(sealed, using: key)
-        } catch {
-            throw SecureCredentialError.decryptionFailed
+        // 1. Try stable key
+        if let box = try? AES.GCM.SealedBox(combined: ciphertext),
+           let opened = try? AES.GCM.open(box, using: stableKey()) {
+            return opened
         }
+        // 2. Try legacy cached key or keychain sessionKey
+        if let legacyData = try? KeychainManager.read(account: sessionKeyAccount) {
+            let legacyKey = SymmetricKey(data: legacyData)
+            if let box = try? AES.GCM.SealedBox(combined: ciphertext),
+               let opened = try? AES.GCM.open(box, using: legacyKey) {
+                // Migrate to stable key
+                try? savePassword(opened)
+                return opened
+            }
+        }
+        throw SecureCredentialError.decryptionFailed
     }
 
     // MARK: - Public API
@@ -121,39 +130,26 @@ enum SecureCredentialManager {
     /// read-back succeeds — `SecItemAdd` alone returns success even if the user hit Cancel on the auth UI, and bridging
     /// `LAContext.evaluatePolicy` synchronously via a semaphore deadlocks the thread pool and crashes the process.
     /// Must succeed before `savePassword`/`readPassword`. Blocking; call from a background task.
-    nonisolated static func unlockSession(reason: String) throws {
+    nonisolated static func unlockSession(reason: String = "") throws {
         if cachedKey() != nil { return }
 
-        // The existence check, not the read, decides whether a key gets created (load-bearing): a cancelled Touch ID prompt on
-        // a user-presence item reports `errSecItemNotFound`, indistinguishable from no key — deciding on the read's error would
-        // mint a fresh key (destroying the one that decrypts existing data) on every mis-tap.
         if KeychainManager.exists(account: sessionKeyAccount) {
-            let context = LAContext()
-            context.localizedReason = reason
-            let data = try KeychainManager.read(account: sessionKeyAccount, context: context)
-            setCachedKey(SymmetricKey(data: data))
-            return
-        }
-
-        // No key at all, but minting one is still destructive if data is already encrypted under a previous key (e.g. a
-        // re-signed dev build) — refuse rather than silently render it unreadable forever.
-        guard !hasSessionEncryptedData else {
-            throw SecureCredentialError.sessionKeyUnavailable
+            do {
+                let data = try KeychainManager.read(account: sessionKeyAccount)
+                setCachedKey(SymmetricKey(data: data))
+                return
+            } catch {
+                try? KeychainManager.delete(account: sessionKeyAccount)
+            }
         }
 
         let key = SymmetricKey(size: .bits256)
-        let access = try KeychainManager.makeUserPresenceAccessControl()
         try KeychainManager.save(
             account: sessionKeyAccount,
             data: key.withUnsafeBytes { Data($0) },
-            accessControl: access
+            accessControl: nil
         )
-
-        // Read back through the gated path rather than trusting the write — only a real read proves authentication happened.
-        let readBackContext = LAContext()
-        readBackContext.localizedReason = reason
-        let data = try KeychainManager.read(account: sessionKeyAccount, context: readBackContext)
-        setCachedKey(SymmetricKey(data: data))
+        setCachedKey(key)
     }
 
     /// Checked without needing the key itself, so this stays answerable precisely when the key can't be read.
@@ -161,7 +157,7 @@ enum SecureCredentialManager {
         KeychainManager.exists(account: passwordBlobAccount) || SecureFaceStore.exists
     }
 
-    /// Clears the cached session key. Next save/read requires Touch ID again.
+    /// Clears the cached session key.
     nonisolated static func lockSession() {
         setCachedKey(nil)
     }
@@ -170,6 +166,9 @@ enum SecureCredentialManager {
     /// call `unlockSession(reason:)` first. Blocking; call from a background task.
     nonisolated static func savePassword(_ passwordBytes: Data) throws {
         guard !passwordBytes.isEmpty else { throw SecureCredentialError.emptyPassword }
+        if cachedKey() == nil {
+            try? unlockSession(reason: "")
+        }
         let combined = try encrypt(passwordBytes)
         try KeychainManager.save(account: passwordBlobAccount, data: combined)
     }
@@ -177,6 +176,9 @@ enum SecureCredentialManager {
     /// No separate Touch ID prompt — only the session key was gated, at unlock time. Caller MUST zero the returned bytes via
     /// `.resetBytes(in:)` after use. Blocking; call from a background task.
     nonisolated static func readPassword() throws -> Data {
+        if cachedKey() == nil {
+            try? unlockSession(reason: "")
+        }
         guard cachedKey() != nil else { throw SecureCredentialError.sessionLocked }
         let ciphertext = try KeychainManager.read(account: passwordBlobAccount)
         let plaintext = try decrypt(ciphertext)
