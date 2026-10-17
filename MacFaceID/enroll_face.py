@@ -34,10 +34,21 @@ def main():
         "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/models"
     ]
     model_dir = candidate_model_dirs[0]
+    found_models = False
     for m_dir in candidate_model_dirs:
-        if os.path.exists(os.path.join(m_dir, "face_detection_yunet_2023mar.onnx")):
+        if os.path.exists(os.path.join(m_dir, "face_detection_yunet_2023mar.onnx")) and \
+           os.path.exists(os.path.join(m_dir, "face_recognition_sface_2021dec.onnx")):
             model_dir = m_dir
+            found_models = True
             break
+
+    if not found_models:
+        print("[*] Downloading biometrics models...")
+        try:
+            import download_models
+            download_models.download_models(model_dir)
+        except Exception as e:
+            print(f"Failed to auto-download models: {e}")
 
     detector = cv2.FaceDetectorYN.create(
         os.path.join(model_dir, "face_detection_yunet_2023mar.onnx"),
@@ -69,8 +80,12 @@ def main():
     h, w, _ = frame.shape
     detector.setInputSize((w, h))
     
-    window_name = "MacFaceID Enrollment - Look at the Camera"
+    window_name = "Glance-V2 Face Scanner - Look at the Camera"
     cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE)
+    try:
+        subprocess.Popen(["osascript", "-e", f'tell application "System Events" to set frontmost of first process whose unix id is {os.getpid()} to true'])
+    except Exception:
+        pass
     
     speak("Please adjust your screen and look at the camera")
     

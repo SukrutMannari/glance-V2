@@ -53,49 +53,44 @@ Standard macOS installer files (`.dmg` and `.pkg`) are available under [GitHub R
 | **Intel (x86_64 / Hackintosh)** | `Glance-v2.0-Intel.dmg` | `Glance-v2.0-Intel.pkg` |
 
 ### How to Install:
-- **Using `.dmg`**: Double-click the `.dmg` to mount the image, then drag `Glance.app` into your `Applications` shortcut folder.
-- **Using `.pkg`**: Double-click the `.pkg` to run the macOS installation wizard, which automatically installs Glance into `/Applications`.
+- **Using `.pkg` (Recommended)**: Double-click the `.pkg` installer to automatically install both `Glance.app` and `FaceScanner.app` into `/Applications` — no unzipping required!
+- **Using `.dmg`**: Open the `.dmg` image and drag `Glance.app` and `FaceScanner.app` into your `Applications` shortcut folder.
 
 ---
 
-## 🚀 Setting Up the Biometrics Engine
+## 📸 The Custom Face Scanner
 
-Glance-V2 utilizes a lightweight, local OpenCV Python biometrics engine (`MacFaceID`). You only need to set it up once:
+Glance-V2 replaces the default notch sweep with a high-accuracy, custom interactive face scanner backed by OpenCV YuNet & SFace.
 
-### 1. Run Automated Setup
+<p align="center">
+  <b>Included: FaceScanner.app & Integrated Glance UI Scanner</b>
+</p>
 
-Open Terminal and run:
+### 👤 3 Easy Ways to Enroll Your Face:
 
-```bash
-cd /Applications/Glance.app/Contents/Resources/MacFaceID 2>/dev/null || cd MacFaceID
-chmod +x install.sh
-./install.sh
-```
+#### Method 1: Directly from Glance Settings (Recommended)
+1. Open Glance and click the gear icon to open **Settings**.
+2. Click the **Face** tab in the sidebar.
+3. You will see your **Glance-V2 Biometrics Card** with your profile photo preview, username, and template status.
+4. Click **"Launch Custom Face Scanner"** (or click **"Re-scan Face"** if already enrolled).
+*(You can also click **"Launch Face Scanner…"** from the Glance Menu Bar icon at any time!)*
 
-*Or manually in any directory:*
-```bash
-python3 -m venv ~/.macfaceid/venv
-~/.macfaceid/venv/bin/pip install opencv-python numpy
-python3 MacFaceID/download_models.py
-```
+#### Method 2: Launch the Standalone `FaceScanner.app`
+1. Open **`FaceScanner.app`** from your `/Applications` folder or Spotlight (`⌘ + Space` → `FaceScanner`).
+2. The live camera window will immediately open and guide you through scanning.
 
----
-
-## 👤 Enrolling Your Face
-
-To enroll your face into Glance-V2's biometric database:
-
+#### Method 3: Via Terminal (CLI)
 ```bash
 # From the MacFaceID directory:
 ./venv/bin/python3 enroll_face.py
 ```
-*(Or use `~/.macfaceid/venv/bin/python3 MacFaceID/enroll_face.py`)*
+*(Or run `python3 /Applications/Glance.app/Contents/Resources/MacFaceID/enroll_face.py`)*
 
-### Enrollment Tips:
+### 🎯 Interactive Scanning Experience:
 1. A live camera preview window will pop up on your screen.
 2. Center your face inside the green bounding box and look directly at your webcam.
 3. Tilt your head slightly up/down/left/right as prompted by the audio chimes.
-4. Once 5 high-resolution feature vectors are recorded, you'll hear a confirmation chime and your template is saved!
+4. Once 5 high-resolution feature vectors are recorded, you'll hear a success chime, your template is saved, and a high-resolution preview photo is saved directly into Glance Settings!
 
 ---
 

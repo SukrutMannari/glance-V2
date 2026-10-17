@@ -158,6 +158,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(sessionItem)
         sessionMenuItem = sessionItem
 
+        let scanItem = NSMenuItem(title: "Launch Face Scanner…", action: #selector(launchFaceScanner), keyEquivalent: "s")
+        scanItem.target = self
+        scanItem.image = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: nil)
+        menu.addItem(scanItem)
+
         let settingsItem = NSMenuItem(title: "Settings", action: #selector(openSettingsWindow), keyEquivalent: ",")
         settingsItem.target = self
         settingsItem.image = NSImage(systemSymbolName: "gearshape.fill", accessibilityDescription: nil)
@@ -267,6 +272,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openSettingsWindow() {
         revealSettingsWindow()
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Menu bar "Launch Face Scanner" — opens our custom live biometrics scanner.
+    @objc private func launchFaceScanner() {
+        MacFaceIDEngine.shared.launchEnrollment()
     }
 
     /// True whenever an updated user hasn't acknowledged the post-update security notice yet.

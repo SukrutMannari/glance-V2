@@ -123,4 +123,129 @@ final class MacFaceIDEngine: @unchecked Sendable {
             process.terminate()
         }
     }
+
+    // MARK: - Custom Face Scanner & Template Management
+
+    private var resolvedEnrollmentPaths: (python: String, script: String) {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+
+        var candidateDirs: [String] = []
+        if let res = Bundle.main.resourceURL?.appendingPathComponent("MacFaceID").path {
+            candidateDirs.append(res)
+        }
+        candidateDirs.append("\(home)/.macfaceid")
+        candidateDirs.append(Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MacFaceID").path)
+        candidateDirs.append("/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID")
+
+        for dir in candidateDirs {
+            let pythonBin = "\(dir)/venv/bin/python3"
+            let enrollScript = "\(dir)/enroll_face.py"
+            if fm.fileExists(atPath: pythonBin) && fm.fileExists(atPath: enrollScript) {
+                return (pythonBin, enrollScript)
+            }
+        }
+
+        for dir in candidateDirs {
+            let enrollScript = "\(dir)/enroll_face.py"
+            if fm.fileExists(atPath: enrollScript) {
+                for py in ["/usr/local/bin/python3", "/opt/homebrew/bin/python3", "/usr/bin/python3"] {
+                    if fm.fileExists(atPath: py) {
+                        return (py, enrollScript)
+                    }
+                }
+            }
+        }
+
+        return (
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/venv/bin/python3",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/enroll_face.py"
+        )
+    }
+
+    func isEnrolled(username: String = NSUserName()) -> Bool {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+        let candidatePaths = [
+            "\(home)/.macfaceid/templates/\(username).npy",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/templates/\(username).npy",
+            Bundle.main.bundleURL.deletingLastPathComponent().appendingPathComponent("MacFaceID/templates/\(username).npy").path
+        ]
+        return candidatePaths.contains { fm.fileExists(atPath: $0) }
+    }
+
+    func enrolledPreviewURL(username: String = NSUserName()) -> URL? {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+        let candidatePaths = [
+            "\(home)/.macfaceid/templates/preview_\(username).jpg",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/templates/preview_\(username).jpg"
+        ]
+        for path in candidatePaths {
+            if fm.fileExists(atPath: path) {
+                return URL(fileURLWithPath: path)
+            }
+        }
+        return nil
+    }
+
+    func enrolledDate(username: String = NSUserName()) -> Date? {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+        let candidatePaths = [
+            "\(home)/.macfaceid/templates/\(username).npy",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/templates/\(username).npy"
+        ]
+        for path in candidatePaths {
+            if let attrs = try? fm.attributesOfItem(atPath: path),
+               let modDate = attrs[.modificationDate] as? Date {
+                return modDate
+            }
+        }
+        return nil
+    }
+
+    @discardableResult
+    func deleteEnrollment(username: String = NSUserName()) -> Bool {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser.path
+        let candidatePaths = [
+            "\(home)/.macfaceid/templates/\(username).npy",
+            "\(home)/.macfaceid/templates/preview_\(username).jpg",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/templates/\(username).npy",
+            "/Users/sukrutmannari/.gemini/antigravity/scratch/MacFaceID/templates/preview_\(username).jpg"
+        ]
+        var deletedAny = false
+        for path in candidatePaths {
+            if fm.fileExists(atPath: path) {
+                try? fm.removeItem(atPath: path)
+                deletedAny = true
+            }
+        }
+        return deletedAny
+    }
+
+    @discardableResult
+    func launchEnrollment(username: String = NSUserName(), onCompletion: (@Sendable (Bool) -> Void)? = nil) -> Process? {
+        let paths = resolvedEnrollmentPaths
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: paths.python)
+        proc.arguments = [paths.script, username]
+
+        proc.terminationHandler = { process in
+            let success = process.terminationStatus == 0
+            DispatchQueue.main.async {
+                onCompletion?(success)
+            }
+        }
+
+        do {
+            try proc.run()
+            return proc
+        } catch {
+            Self.logger.error("Failed to launch enrollment: \(error.localizedDescription, privacy: .public)")
+            onCompletion?(false)
+            return nil
+        }
+    }
 }

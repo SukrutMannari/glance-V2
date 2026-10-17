@@ -28,3 +28,9 @@ MacFaceID/models/
 MacFaceID/templates/*.npy
 MacFaceID/templates/*.jpg
 MacFaceID/__pycache__/
+
+# FaceScannerApp build artifacts
+FaceScannerApp/FaceScanner
+FaceScannerApp/FaceScanner_*
+FaceScannerApp/*.app
+
